@@ -1,7 +1,9 @@
 package com.example.crud.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.same;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +46,17 @@ class MusicServiceTest {
   }
 
   @Test
+  void createMusicShouldThrowMusicAlreadyExistsWhenMusicAlreadyExists() {
+    var dto = new MusicDTO(ARTIST, SONG_TITLE, YEAR);
+    when(repository.exists(ARTIST, SONG_TITLE)).thenReturn(true);
+
+    assertThatThrownBy(() -> service.createMusic(dto))
+        .isInstanceOf(MusicAlreadyExistsException.class);
+
+    verify(repository, never()).save(any(Music.class));
+  }
+
+  @Test
   void getMusicShouldLoadEntityAndConvertToDto() {
     var entity = new Music(ARTIST, SONG_TITLE, YEAR);
     when(repository.get(ARTIST, SONG_TITLE)).thenReturn(entity);
@@ -59,6 +72,7 @@ class MusicServiceTest {
   @Test
   void updateMusicShouldConvertDtoToEntityAndUpdate() {
     var dto = new MusicDTO(ARTIST, SONG_TITLE, YEAR);
+    when(repository.exists(ARTIST, SONG_TITLE)).thenReturn(true);
 
     service.updateMusic(dto);
 
@@ -69,6 +83,17 @@ class MusicServiceTest {
     assertThat(entity.getArtist()).isEqualTo(ARTIST);
     assertThat(entity.getSongTitle()).isEqualTo(SONG_TITLE);
     assertThat(entity.getYear()).isEqualTo(YEAR);
+  }
+
+  @Test
+  void updateMusicShouldThrowMusicNotFoundWhenMusicDoesNotExist() {
+    var dto = new MusicDTO(ARTIST, SONG_TITLE, YEAR);
+    when(repository.exists(ARTIST, SONG_TITLE)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.updateMusic(dto))
+        .isInstanceOf(MusicNotFoundException.class);
+
+    verify(repository, never()).update(any(Music.class));
   }
 
   @Test

@@ -1,9 +1,8 @@
 package com.example.crud.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +17,8 @@ import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
+import software.amazon.awssdk.enhanced.dynamodb.model.PutItemEnhancedRequest;
+import software.amazon.awssdk.enhanced.dynamodb.model.UpdateItemEnhancedRequest;
 
 @ExtendWith(MockitoExtension.class)
 class MusicRepositoryTest {
@@ -42,21 +43,35 @@ class MusicRepositoryTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   void saveShouldPutMusicRecord() {
     var music = new Music(ARTIST, SONG_TITLE, YEAR);
 
     repository.save(music);
 
-    verify(table, times(1)).putItem(same(music));
+    var captor = ArgumentCaptor.forClass(PutItemEnhancedRequest.class);
+    verify(table, times(1)).putItem(captor.capture());
+
+    var request = captor.getValue();
+    assertThat(request.item()).isSameAs(music);
+    assertThat(request.conditionExpression().expression())
+        .isEqualTo("attribute_not_exists(Artist) AND attribute_not_exists(SongTitle)");
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   void updateShouldPersistMusicRecord() {
     var music = new Music(ARTIST, SONG_TITLE, YEAR);
 
     repository.update(music);
 
-    verify(table, times(1)).updateItem(same(music));
+    var captor = ArgumentCaptor.forClass(UpdateItemEnhancedRequest.class);
+    verify(table, times(1)).updateItem(captor.capture());
+
+    var request = captor.getValue();
+    assertThat(request.item()).isSameAs(music);
+    assertThat(request.conditionExpression().expression())
+        .isEqualTo("attribute_exists(Artist) AND attribute_exists(SongTitle)");
   }
 
   @Test
@@ -72,6 +87,25 @@ class MusicRepositoryTest {
     assertThat(captor.getValue().sortKeyValue().orElseThrow().s()).isEqualTo(SONG_TITLE);
     assertThat(result).isSameAs(music);
     assertThat(result.getYear()).isEqualTo(YEAR);
+  }
+
+  @Test
+  void existsShouldReturnTrueWhenMusicRecordExists() {
+    var music = new Music(ARTIST, SONG_TITLE, YEAR);
+    when(table.getItem(any(Key.class))).thenReturn(music);
+
+    var result = repository.exists(ARTIST, SONG_TITLE);
+
+    assertThat(result).isTrue();
+  }
+
+  @Test
+  void existsShouldReturnFalseWhenMusicRecordDoesNotExist() {
+    when(table.getItem(any(Key.class))).thenReturn(null);
+
+    var result = repository.exists(ARTIST, SONG_TITLE);
+
+    assertThat(result).isFalse();
   }
 
   @Test

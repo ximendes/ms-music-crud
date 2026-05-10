@@ -22,7 +22,7 @@ sourceSets {
 	integrationTest {
 		java.setSrcDirs(['src/it/java'])
 		resources.setSrcDirs(['src/it/resources'])
-		compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+		compileClasspath += sourceSets.main.output
 		runtimeClasspath += output + compileClasspath
 	}
 }
@@ -39,6 +39,7 @@ dependencies {
 
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	integrationTestImplementation("org.springframework.boot:spring-boot-webmvc-test")
 	integrationTestImplementation(libs.testcontainers.junit.jupiter)
 	integrationTestImplementation(libs.testcontainers.localstack)
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

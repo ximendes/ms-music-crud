@@ -14,8 +14,8 @@ public class MusicService {
   }
 
   public void createMusic(MusicDTO music) {
-    var entity = music.toEntity();
-    repository.save(entity);
+    validateMusicDoesNotExist(music.artist(), music.songTitle());
+    repository.save(music.toEntity());
   }
 
   public MusicDTO getMusic(String artist, String song) {
@@ -24,11 +24,23 @@ public class MusicService {
   }
 
   public void updateMusic(MusicDTO music) {
-    var entity = music.toEntity();
-    repository.update(entity);
+    validateMusicExists(music.artist(), music.songTitle());
+    repository.update(music.toEntity());
   }
 
-  public void deleteMusic(String artist,  String song) {
+  public void deleteMusic(String artist, String song) {
     repository.delete(artist, song);
+  }
+
+  private void validateMusicDoesNotExist(String artist, String song) {
+    if (repository.exists(artist, song)) {
+      throw new MusicAlreadyExistsException();
+    }
+  }
+
+  private void validateMusicExists(String artist, String song) {
+    if (!repository.exists(artist, song)) {
+      throw new MusicNotFoundException();
+    }
   }
 }
