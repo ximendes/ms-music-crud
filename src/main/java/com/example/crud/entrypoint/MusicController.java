@@ -24,7 +24,7 @@ public class MusicController {
 
   @GetMapping("/{artist}/{song}")
   public ResponseEntity<MusicResponse> getMusic(@PathVariable String artist,
-      @PathVariable String song) {
+                                                @PathVariable String song) {
     var music = service.getMusic(artist, song);
     return ResponseEntity.ok(music.toResponse());
   }
