@@ -51,9 +51,22 @@ Local development uses LocalStack to emulate DynamoDB.
     │   │       └── MusicService.java
     │   └── resources/
     │       └── application.yaml
+    ├── it/
+    │   ├── java/com/example/crud/
+    │   │   ├── repository/
+    │   │   │   └── MusicRepositoryIT.java
+    │   │   └── support/
+    │   │       └── DynamoDbIntegrationTest.java
+    │   └── resources/
+    │       └── .gitkeep
     └── test/
         └── java/com/example/crud/
-            └── CrudApplicationTests.java
+            ├── entrypoint/
+            │   └── MusicControllerTest.java
+            ├── repository/
+            │   └── MusicRepositoryTest.java
+            └── service/
+                └── MusicServiceTest.java
 ```
 
 ## Main Layers
@@ -100,6 +113,12 @@ Run tests:
 
 ```bash
 ./gradlew test
+```
+
+Run integration tests:
+
+```bash
+./gradlew integrationTest
 ```
 
 Build the project:
@@ -176,7 +195,14 @@ Request body shape:
 ## Testing Guidelines
 
 - Add or update tests when changing business logic, repository behavior, or API contracts.
+- Keep unit tests in `src/test/java` only.
+- Name unit tests with the `*Test.java` suffix.
+- Unit tests must be fast and mock external dependencies such as databases, APIs, and network calls.
+- Keep integration tests in `src/it/java` only.
+- Name integration tests with the `*IT.java` suffix.
+- Integration tests may exercise component interaction and real infrastructure emulated with Testcontainers or LocalStack.
 - Run `./gradlew test` before finishing changes when the task touches Java code.
+- Run `./gradlew integrationTest` before finishing changes that touch integration behavior or repository persistence.
 - Run `./gradlew clean build` when changing dependencies, Gradle configuration, Docker build behavior, or application startup configuration.
 
 ## Commit Guidelines
