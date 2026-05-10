@@ -179,6 +179,34 @@ Request body shape:
 - Run `./gradlew test` before finishing changes when the task touches Java code.
 - Run `./gradlew clean build` when changing dependencies, Gradle configuration, Docker build behavior, or application startup configuration.
 
+## Commit Guidelines
+
+Use Conventional Commits for commit messages in this project.
+
+Commit message format:
+
+```text
+<type>(optional-scope): <description>
+```
+
+Common types:
+
+- `feat`: a new feature.
+- `fix`: a bug fix.
+- `docs`: documentation-only changes.
+- `test`: adding or updating tests.
+- `refactor`: code changes that neither fix a bug nor add a feature.
+- `chore`: maintenance changes such as build, tooling, or configuration updates.
+
+Examples:
+
+```text
+feat(music): add endpoint to list records
+fix(repository): handle missing DynamoDB items
+docs: update LocalStack setup instructions
+test(service): cover music update flow
+```
+
 ## Docker and LocalStack Notes
 
 - `Docker/docker-compose.yaml` starts LocalStack.
