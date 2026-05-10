@@ -6,7 +6,7 @@ Guidelines for AI coding agents working in this repository.
 
 This is a Java 21 Spring Boot CRUD API for managing music records in DynamoDB.
 
-The API exposes endpoints under `/music` and stores records in the `Music` DynamoDB table.
+The API exposes endpoints under `/music` and stores records in the `Music` DynamoDB table. Each record contains an artist, song title, and release year.
 
 Primary DynamoDB keys:
 
@@ -156,7 +156,8 @@ Request body shape:
 ```json
 {
   "artist": "Daft Punk",
-  "songTitle": "One More Time"
+  "songTitle": "One More Time",
+  "year": 2000
 }
 ```
 

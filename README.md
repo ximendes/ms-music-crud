@@ -2,7 +2,7 @@
 
 Spring Boot REST API for managing music records in a DynamoDB table.
 
-The application exposes CRUD endpoints under `/music` and stores each item in the `Music` DynamoDB table, using:
+The application exposes CRUD endpoints under `/music` and stores each item in the `Music` DynamoDB table. Each record contains an artist, song title, and release year, using:
 
 - `Artist` as the partition key
 - `SongTitle` as the sort key
@@ -89,6 +89,16 @@ http://localhost:8080
 
 ## API Usage
 
+Request and response bodies use this shape:
+
+```json
+{
+  "artist": "Daft Punk",
+  "songTitle": "One More Time",
+  "year": 2000
+}
+```
+
 ### Create a music record
 
 ```bash
@@ -96,7 +106,8 @@ curl -X POST http://localhost:8080/music \
   -H "Content-Type: application/json" \
   -d '{
     "artist": "Daft Punk",
-    "songTitle": "One More Time"
+    "songTitle": "One More Time",
+    "year": 2000
   }'
 ```
 
@@ -113,7 +124,8 @@ curl -X PUT http://localhost:8080/music \
   -H "Content-Type: application/json" \
   -d '{
     "artist": "Daft Punk",
-    "songTitle": "One More Time"
+    "songTitle": "One More Time",
+    "year": 2000
   }'
 ```
 
