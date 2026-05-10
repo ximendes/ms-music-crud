@@ -2,6 +2,8 @@ package com.example.crud.service;
 
 import com.example.crud.repository.Music;
 import com.example.crud.repository.MusicRepository;
+import com.example.crud.service.exceptions.MusicAlreadyExistsException;
+import com.example.crud.service.exceptions.MusicNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service

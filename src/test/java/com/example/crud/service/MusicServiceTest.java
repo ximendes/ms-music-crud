@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.example.crud.repository.Music;
 import com.example.crud.repository.MusicRepository;
+import com.example.crud.service.exceptions.MusicAlreadyExistsException;
+import com.example.crud.service.exceptions.MusicNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

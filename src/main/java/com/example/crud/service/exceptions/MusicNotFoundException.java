@@ -1,4 +1,4 @@
-package com.example.crud.service;
+package com.example.crud.service.exceptions;
 
 public class MusicNotFoundException extends RuntimeException {
 

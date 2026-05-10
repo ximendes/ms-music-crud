@@ -1,7 +1,7 @@
 package com.example.crud.entrypoint;
 
-import com.example.crud.service.MusicAlreadyExistsException;
-import com.example.crud.service.MusicNotFoundException;
+import com.example.crud.service.exceptions.MusicAlreadyExistsException;
+import com.example.crud.service.exceptions.MusicNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
