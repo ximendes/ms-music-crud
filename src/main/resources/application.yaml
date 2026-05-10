@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: crud
+
+
+aws:
+  dynamodb:
+    access-key: teste
+    secret-key: teste
+    region: us-east-1
+    endpoint: ${AWS_DYNAMODB_ENDPOINT:http://localhost:4566}
+
+#logging:
+#  level:
+#    root: INFO
+#    org.springframework.web: DEBUG
+#    software.amazon.awssdk: DEBUG
+#    software.amazon.awssdk.request: DEBUG

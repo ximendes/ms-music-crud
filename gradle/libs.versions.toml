@@ -1,0 +1,13 @@
+[versions]
+aws = "2.42.33"
+spring-boot = "4.0.4"
+dependency-management = "1.1.7"
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+dependency-management = {id = "io.spring.dependency-management", version.ref= "dependency-management"}
+
+[libraries]
+aws-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws" }
+aws-dynamodb = { module = "software.amazon.awssdk:dynamodb" }
+aws-dynamodb-enhanced = { module = "software.amazon.awssdk:dynamodb-enhanced" }

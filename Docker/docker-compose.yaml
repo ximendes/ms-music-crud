@@ -1,0 +1,17 @@
+services:
+  localstack:
+    container_name: "projeto-estudo"
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:4566:4566"            # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559"  # external services port range
+    environment:
+      # LocalStack configuration: https://docs.localstack.cloud/references/configuration/
+      - DEBUG=${DEBUG:-0}
+      - PERSISTENCE=1
+    volumes:
+      - "localstack-data:/var/lib/localstack"
+      - "./create-dynamo.sh:/etc/localstack/init/ready.d/init-aws.sh"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+volumes:
+  localstack-data:

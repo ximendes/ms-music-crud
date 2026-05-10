@@ -1,0 +1,33 @@
+plugins {
+	id 'java'
+	alias(libs.plugins.spring.boot)
+	alias(libs.plugins.dependency.management)
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+description = 'crud'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation(platform(libs.aws.bom))
+	implementation(libs.aws.dynamodb)
+	implementation(libs.aws.dynamodb.enhanced)
+
+	implementation("org.springframework.boot:spring-boot-starter-web")
+	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
