@@ -20,12 +20,14 @@ For local development, the project uses LocalStack to emulate AWS DynamoDB.
 | AWS SDK for Java BOM | 2.42.33 | AWS SDK dependency alignment |
 | AWS SDK DynamoDB | 2.42.33 | Low-level DynamoDB client |
 | AWS SDK DynamoDB Enhanced Client | 2.42.33 | Object mapping for DynamoDB records |
+| Testcontainers | 2.0.5 | Integration tests with disposable LocalStack containers |
 | LocalStack | latest Docker image | Local AWS service emulator |
 
 ## Requirements
 
 - Java 21
-- Docker and Docker Compose
+- Docker
+- Docker Compose
 - Bash-compatible shell
 
 The Gradle wrapper is included, so a local Gradle installation is not required.
@@ -83,9 +85,26 @@ http://localhost:8080
 
 ### 3. Run tests
 
+Run unit tests:
+
 ```bash
 ./gradlew test
 ```
+
+Unit tests live in `src/test/java` and use the `*Test.java` suffix. They should
+mock external dependencies such as DynamoDB, APIs, and network calls.
+
+Run integration tests:
+
+```bash
+./gradlew integrationTest
+```
+
+Integration tests live in `src/it/java` and use the `*IT.java` suffix.
+The integration tests use Testcontainers to start LocalStack automatically and
+create the `Music` table programmatically. Docker must be available locally, but
+you do not need to run `docker compose up` before executing the integration test
+suite.
 
 ## API Usage
 

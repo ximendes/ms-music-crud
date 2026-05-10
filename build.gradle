@@ -18,6 +18,20 @@ repositories {
 	mavenCentral()
 }
 
+sourceSets {
+	integrationTest {
+		java.setSrcDirs(['src/it/java'])
+		resources.setSrcDirs(['src/it/resources'])
+		compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+		runtimeClasspath += output + compileClasspath
+	}
+}
+
+configurations {
+	integrationTestImplementation.extendsFrom testImplementation
+	integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
 dependencies {
 	implementation(platform(libs.aws.bom))
 	implementation(libs.aws.dynamodb)
@@ -25,9 +39,22 @@ dependencies {
 
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	integrationTestImplementation(libs.testcontainers.junit.jupiter)
+	integrationTestImplementation(libs.testcontainers.localstack)
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
+	useJUnitPlatform()
+}
+
+tasks.register('integrationTest', Test) {
+	description = 'Runs integration tests.'
+	group = 'verification'
+
+	testClassesDirs = sourceSets.integrationTest.output.classesDirs
+	classpath = sourceSets.integrationTest.runtimeClasspath
+	shouldRunAfter tasks.named('test')
+
 	useJUnitPlatform()
 }
