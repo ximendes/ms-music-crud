@@ -32,7 +32,11 @@ public abstract class DynamoDbIntegrationTest {
   private static final String ACCESS_KEY = "test";
   private static final String SECRET_KEY = "test";
 
-  @Container
+  /**
+   * We manage the container lifecycle manually to avoid Spring context caching issues across
+   * integration test classes (a stopped container + cached DynamoDbClient endpoint = connection
+   * refused).
+   */
   private static final LocalStackContainer LOCALSTACK =
       new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
           .withServices("dynamodb");
@@ -48,6 +52,9 @@ public abstract class DynamoDbIntegrationTest {
 
   @BeforeAll
   static void createMusicTable() {
+    // Defensive: some JUnit/Spring lifecycles can invoke @BeforeAll before @DynamicPropertySource.
+    // Starting is idempotent and makes table creation stable across test classes.
+    LOCALSTACK.start();
     try (var client = DynamoDbClient.builder()
                                     .endpointOverride(LOCALSTACK.getEndpoint())
                                     .region(Region.of(REGION))
