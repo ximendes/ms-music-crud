@@ -35,8 +35,11 @@ class MusicServiceTest {
   @Test
   void createMusicShouldConvertDtoToEntityAndSave() {
     var dto = new MusicDTO(ARTIST, SONG_TITLE, YEAR);
+    when(repository.exists(ARTIST, SONG_TITLE)).thenReturn(false);
 
     service.createMusic(dto);
+
+    verify(repository, times(1)).exists(ARTIST, SONG_TITLE);
 
     var captor = ArgumentCaptor.forClass(Music.class);
     verify(repository, times(1)).save(captor.capture());
@@ -55,6 +58,7 @@ class MusicServiceTest {
     assertThatThrownBy(() -> service.createMusic(dto))
         .isInstanceOf(MusicAlreadyExistsException.class);
 
+    verify(repository, times(1)).exists(ARTIST, SONG_TITLE);
     verify(repository, never()).save(any(Music.class));
   }
 
@@ -78,6 +82,8 @@ class MusicServiceTest {
 
     service.updateMusic(dto);
 
+    verify(repository, times(1)).exists(ARTIST, SONG_TITLE);
+
     var captor = ArgumentCaptor.forClass(Music.class);
     verify(repository, times(1)).update(captor.capture());
 
@@ -95,6 +101,7 @@ class MusicServiceTest {
     assertThatThrownBy(() -> service.updateMusic(dto))
         .isInstanceOf(MusicNotFoundException.class);
 
+    verify(repository, times(1)).exists(ARTIST, SONG_TITLE);
     verify(repository, never()).update(any(Music.class));
   }
 
