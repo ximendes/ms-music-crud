@@ -397,3 +397,138 @@ listar todos os agendamentos do usuário.
 A regra de recorrência permanece expressa em conceitos de domínio
 (`WEEKLY`, `MONDAY`, `09:00`), enquanto a infraestrutura traduz essa
 regra para a tecnologia de agendamento utilizada.
+
+
+
+
+
+
+
+
+# Tarefa: Análise e consolidação de documentações — Agendador de eventos
+
+Atue como um **arquiteto de software sênior**, com experiência em Java, Spring Boot, AWS, DynamoDB, EventBridge Scheduler, SNS e SQS, além de arquitetura hexagonal, DDD e sistemas distribuídos.
+
+Tenho duas documentações que descrevem aspectos de um sistema de agendamento de eventos:
+
+1. **Documentação do projeto existente:** contém os padrões, convenções, nomenclaturas e decisões arquiteturais já adotados pelo projeto.
+2. **Documentação complementar do agendador:** contém uma proposta de modelagem e funcionalidades para o sistema de agendamento.
+
+Seu objetivo é analisar as duas documentações e produzir uma versão consolidada, incorporando as informações relevantes da documentação complementar sem descaracterizar os padrões já existentes no projeto.
+
+## 1. Regra prioritária: preservar os padrões do projeto existente
+
+A documentação do projeto existente deve ser considerada a referência principal para convenções e nomenclaturas.
+
+Preserve rigorosamente os padrões já definidos, especialmente:
+
+- Nomenclatura de classes, interfaces, records, enums e métodos Java.
+- Nomenclatura de atributos e chaves do DynamoDB.
+- Padrões de Partition Key (PK) e Sort Key (SK).
+- Estrutura e organização dos pacotes.
+- Nomenclatura de propriedades, atributos e campos dos contratos.
+- Convenções de endpoints e recursos REST.
+- Padrões de serialização e estrutura dos objetos.
+- Padrões arquiteturais e responsabilidades de cada camada.
+
+**Não introduza uma nova nomenclatura apenas porque ela aparece na documentação complementar.**
+
+Caso a documentação complementar utilize nomes diferentes, adapte os conceitos aos padrões existentes, sem alterar arbitrariamente os nomes já estabelecidos.
+
+## 2. Processo obrigatório de análise
+
+Antes de modificar qualquer documentação:
+
+1. Leia integralmente os dois documentos.
+2. Identifique os conceitos e funcionalidades descritos em cada um.
+3. Identifique as decisões arquiteturais já estabelecidas.
+4. Compare as nomenclaturas Java e os atributos do DynamoDB.
+5. Identifique informações redundantes, complementares, conflitantes ou ausentes.
+6. Verifique se as propostas da documentação complementar são compatíveis com a arquitetura existente.
+
+Não comece a mescla antes de concluir essa análise.
+
+## 3. Uso obrigatório da skill `grillme`
+
+Utilize a skill `grillme` para conduzir o esclarecimento de dúvidas antes de tomar decisões que possam alterar a arquitetura, o modelo de dados ou os contratos existentes.
+
+**Não assuma, não invente e não tome decisões silenciosamente.**
+
+Sempre que encontrar:
+
+- Conflitos entre as duas documentações.
+- Ambiguidade na nomenclatura de classes ou atributos.
+- Decisões arquiteturais não especificadas.
+- Informações incompletas ou contraditórias.
+- Mais de uma interpretação possível para determinado requisito.
+- Necessidade de alterar uma decisão já estabelecida no projeto.
+
+Interrompa a execução e me questione utilizando a skill `grillme`.
+
+Faça perguntas objetivas, contextualizando o problema e apresentando as alternativas possíveis quando existirem.
+
+Não escolha uma alternativa por conta própria, mesmo que uma delas pareça tecnicamente mais adequada.
+
+Aguarde minhas respostas antes de prosseguir com os pontos que dependem delas.
+
+## 4. Critérios para a consolidação
+
+Ao mesclar as documentações:
+
+- Preserve integralmente as decisões válidas do projeto existente.
+- Incorpore os requisitos e funcionalidades relevantes do agendador.
+- Elimine duplicidades.
+- Resolva divergências somente após meu esclarecimento.
+- Mantenha consistência entre modelo de domínio, contratos, persistência e integrações AWS.
+- Não remova informações relevantes sem justificativa.
+- Não introduza tecnologias, componentes ou abstrações que não estejam justificadas pelos requisitos.
+- Não transforme sugestões em decisões arquiteturais sem minha aprovação.
+- Mantenha os exemplos de código coerentes com a nomenclatura oficial do projeto.
+
+## 5. Validação técnica
+
+Durante a análise, avalie especialmente a consistência entre:
+
+- Modelo de domínio Java.
+- Estrutura dos itens do DynamoDB.
+- Estratégia de consulta utilizando PK e SK.
+- Criação e gerenciamento de agendamentos no EventBridge Scheduler.
+- Publicação de eventos no SNS.
+- Entrega de mensagens no SQS.
+- Consumo e processamento pela aplicação Java.
+- Tratamento de duplicidade, idempotência e falhas.
+- Estados do agendamento e sincronização entre DynamoDB e EventBridge.
+- Regras de recorrência, periodicidade, timezone e datas de início e término.
+- Estratégia de atualização, pausa, reativação e cancelamento dos agendamentos.
+
+Não considere que uma decisão está correta apenas porque aparece em uma das documentações. Avalie sua coerência com os requisitos e com a arquitetura existente.
+
+## 6. Entregáveis
+
+Ao finalizar a análise e os esclarecimentos, produza:
+
+1. **Documentação consolidada:** versão única, organizada e coerente, incorporando o conteúdo relevante dos dois documentos.
+2. **Registro de decisões:** resumo das decisões mantidas, incorporadas, adaptadas e descartadas, com suas justificativas.
+3. **Registro de nomenclaturas:** relação dos nomes Java e atributos DynamoDB adotados, garantindo aderência aos padrões do projeto existente.
+4. **Pendências:** pontos que permaneceram sem definição, caso existam.
+
+Preserve a organização e o formato da documentação original sempre que possível.
+
+## 7. Restrições finais
+
+- Não sobrescreva os documentos originais.
+- Não descarte conteúdo sem justificativa.
+- Não altere nomenclaturas existentes sem minha autorização.
+- Não implemente código nesta etapa, a menos que eu solicite.
+- Não considere a documentação complementar como fonte de verdade para os padrões do projeto.
+- Não finalize a consolidação enquanto houver dúvidas relevantes sem esclarecimento.
+
+## Primeira ação
+
+Comece identificando e lendo as duas documentações.
+
+Em seguida, apresente um diagnóstico inicial das diferenças, compatibilidades e conflitos encontrados.
+
+Utilize a skill `grillme` para conduzir as perguntas necessárias.
+
+**Sua prioridade é produzir uma documentação consolidada que respeite integralmente a identidade arquitetural e os padrões do projeto existente, sem introduzir decisões por suposição.**
