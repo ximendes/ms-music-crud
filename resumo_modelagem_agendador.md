@@ -317,3 +317,177 @@ Leia e analise a implementação atual da integração com o AWS EventBridge Sch
 Apresente um diagnóstico técnico, identifique os pontos de maior complexidade e proponha uma refatoração incremental, priorizando simplicidade, coesão e separação de responsabilidades.
 
 Utilize a skill `grillme` para esclarecer as decisões necessárias antes de implementar.
+
+
+
+
+
+
+
+---
+#passo a passo
+# Projeto: Refatoração da integração AWS EventBridge Scheduler
+
+Atue como um engenheiro de software sênior, com experiência em Java, Spring Boot, AWS, Clean Architecture, SOLID e refatoração de sistemas existentes.
+
+## Objetivo
+
+Refatorar a integração existente com AWS EventBridge Scheduler, melhorando:
+
+- Separação de responsabilidades.
+- Coesão das classes e métodos.
+- Legibilidade.
+- Testabilidade.
+- Manutenibilidade.
+- Simplicidade da implementação.
+
+A integração e o CRUD já existem. Não recrie funcionalidades nem redesenhe o domínio sem necessidade.
+
+## Regras obrigatórias
+
+1. Preserve os padrões de nomenclatura Java e DynamoDB existentes.
+2. Preserve os contratos e o comportamento funcional atual.
+3. Não faça alterações fora do escopo aprovado.
+4. Evite abstrações e design patterns desnecessários.
+5. Não concentre múltiplas responsabilidades em um único método.
+6. Utilize a skill `grillme` para esclarecer dúvidas e decisões não documentadas.
+7. Não assuma requisitos ou comportamentos.
+8. Não implemente etapas futuras sem autorização.
+
+### Convenção dos dias da semana
+
+O projeto utiliza números de 1 a 7:
+
+- 1 = Domingo
+- 2 = Segunda-feira
+- 3 = Terça-feira
+- 4 = Quarta-feira
+- 5 = Quinta-feira
+- 6 = Sexta-feira
+- 7 = Sábado
+
+Preserve essa representação. A conversão para cron AWS deve ficar na infraestrutura.
+
+## Execução por etapas
+
+O trabalho deve ser obrigatoriamente dividido em:
+
+1. Diagnóstico.
+2. Planejamento.
+3. Refatoração incremental.
+4. Validação.
+5. Consolidação.
+
+Execute somente a etapa solicitada.
+
+Não avance automaticamente para a próxima etapa.
+
+## Persistência de contexto
+
+Utilize a pasta `docs/refactoring/` para registrar o progresso.
+
+Mantenha atualizados:
+
+- `00-context.md`
+- `01-diagnosis.md`
+- `02-refactoring-plan.md`
+- `03-decisions.md`
+- `04-progress.md`
+- `05-validation.md`
+
+Ao concluir cada etapa:
+
+1. Registre o que foi realizado.
+2. Registre as decisões tomadas.
+3. Registre as dúvidas pendentes.
+4. Registre os arquivos alterados.
+5. Identifique a próxima ação.
+6. Atualize `04-progress.md`.
+
+Não considere uma decisão aprovada sem confirmação explícita.
+
+## Recuperação de contexto
+
+No início de cada nova sessão:
+
+1. Leia este documento.
+2. Leia `04-progress.md`.
+3. Leia os documentos da etapa em andamento.
+4. Confira o estado atual do Git.
+5. Verifique se existem alterações não registradas.
+6. Retome do último checkpoint confirmado.
+
+Não repita etapas concluídas sem necessidade.
+
+## Controle de execução
+
+Trabalhe com mudanças pequenas e verificáveis.
+
+Ao finalizar cada etapa, apresente um resumo e aguarde minha autorização para continuar.
+
+Se o contexto disponível estiver insuficiente, interrompa a execução, leia os arquivos de contexto e faça perguntas utilizando GrillMe quando necessário.
+
+---
+
+Execute somente a Etapa 1 — Diagnóstico.
+
+Analise a implementação atual da integração com EventBridge Scheduler. Identifique responsabilidades misturadas, métodos complexos, condicionais excessivas, acoplamentos e oportunidades de simplificação.
+
+Não altere código.
+
+Registre os resultados em `01-diagnosis.md` e atualize `04-progress.md`.
+
+Ao finalizar, apresente o diagnóstico e aguarde minha autorização.
+
+---
+
+
+Execute somente a Etapa 2 — Planejamento.
+
+Com base no diagnóstico aprovado, proponha uma refatoração incremental, priorizando simplicidade e separação de responsabilidades.
+
+Identifique classes a criar, modificar ou remover, justificando cada alteração.
+
+Utilize GrillMe para esclarecer decisões pendentes.
+
+Não altere código.
+
+Registre o plano em `02-refactoring-plan.md` e atualize o progresso. Aguarde minha aprovação.
+
+
+---
+
+
+Execute a próxima unidade de trabalho aprovada no plano de refatoração.
+
+Antes de alterar código, releia o plano e as decisões registradas.
+
+Implemente somente essa unidade, preservando o comportamento existente.
+
+Execute os testes pertinentes, revise o diff e atualize `04-progress.md`.
+
+Não avance para outra unidade sem minha autorização.
+
+
+---
+
+
+Execute a etapa de validação da refatoração.
+
+Verifique compilação, testes, regressões, responsabilidades, acoplamentos e aderência ao plano aprovado.
+
+Não faça novas refatorações durante esta etapa sem minha autorização.
+
+Registre os resultados em `05-validation.md` e atualize o progresso.
+
+
+---
+
+
+Execute a consolidação final.
+
+Revise os arquivos de contexto, documente a arquitetura final, as decisões tomadas, as alterações realizadas, os testes executados e as pendências.
+
+Atualize `04-progress.md` e `05-validation.md`.
+
+Apresente um relatório final comparando a implementação anterior com a refatorada.
