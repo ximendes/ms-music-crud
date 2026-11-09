@@ -1,534 +1,319 @@
-# Resumo arquitetural --- Agendador de eventos (Java + DynamoDB)
-
-## Objetivo
-
-Construir um agendador genérico no qual cada usuário pode cadastrar N
-agendamentos, com diferentes tipos de eventos, recorrências e contratos
-de payload.
-
-Arquitetura considerada: Java, DynamoDB, Amazon EventBridge Scheduler,
-SNS e SQS.
-
-## 1. Modelo conceitual
-
-Cada agendamento é uma entidade independente (`ScheduledEvent`),
-composta por:
-
--   Identificação do usuário e do agendamento.
--   Nome e identificador do produto/agrupamento (`productKey`).
--   Status.
--   Regra de recorrência.
--   Payload específico do evento.
--   Versão do contrato.
--   Informações de auditoria.
-
-Um agendamento pode ter vários dias de execução, mas representa apenas
-um schedule no EventBridge. Por exemplo, segunda, terça e quarta às
-09:00 é um único agendamento recorrente.
-
-## 2. Contrato de domínio Java
-
-### ScheduledEvent
-
-``` java
-public record ScheduledEvent(
-    String id,
-    String userId,
-    String name,
-    String productKey,
-    ScheduleStatus status,
-    Recurrence recurrence,
-    String payload,
-    Integer schemaVersion,
-    Instant createdAt,
-    Instant updatedAt
-) {}
-```
-
-### Recurrence
-
-``` java
-public record Recurrence(
-    Frequency frequency,
-    LocalTime time,
-    ZoneId timezone,
-    List<DayOfWeek> daysOfWeek,
-    Integer dayOfMonth,
-    LocalDate startDate,
-    LocalDate endDate
-) {}
-```
-
-### Enums
-
-``` java
-public enum Frequency {
-    DAILY,
-    WEEKLY,
-    MONTHLY
-}
-```
-
-``` java
-public enum ScheduleStatus {
-    PROVISIONING,
-    ACTIVE,
-    PAUSED,
-    CANCELLED
-}
-```
-
-O estado de sincronização com o EventBridge deve ser separado do estado
-de negócio. Uma opção é manter `syncStatus`, com valores como `PENDING`,
-`SYNCED` e `FAILED`.
-
-## 3. Exemplos de recorrência
-
-### Semanal --- segunda, terça e quarta às 09:00
-
-``` json
-{
-  "frequency": "WEEKLY",
-  "time": "09:00",
-  "timezone": "America/Sao_Paulo",
-  "daysOfWeek": ["MONDAY", "TUESDAY", "WEDNESDAY"],
-  "startDate": "2026-11-09",
-  "endDate": null
-}
-```
-
-Expressão cron do EventBridge:
-
-``` text
-cron(0 9 ? * MON,TUE,WED *)
-```
-
-### Mensal --- todo dia 10 às 08:00
-
-``` json
-{
-  "frequency": "MONTHLY",
-  "time": "08:00",
-  "timezone": "America/Sao_Paulo",
-  "dayOfMonth": 10,
-  "startDate": "2026-11-10",
-  "endDate": null
-}
-```
-
-Expressão cron:
-
-``` text
-cron(0 8 10 * ? *)
-```
-
-### Diário --- todos os dias às 09:00
-
-``` json
-{
-  "frequency": "DAILY",
-  "time": "09:00",
-  "timezone": "America/Sao_Paulo",
-  "startDate": "2026-11-09",
-  "endDate": null
-}
-```
-
-Expressão cron:
-
-``` text
-cron(0 9 * * ? *)
-```
-
-### Regras definidas
-
--   Recorrência semanal aceita múltiplos dias.
--   Recorrência mensal aceita dias entre 1 e 31.
--   Se o dia não existir no mês, a execução é ignorada. Exemplo: dia 31
-    em fevereiro.
--   `startDate` e `endDate` delimitam a validade da recorrência.
--   O timezone utiliza identificadores IANA, como `America/Sao_Paulo`.
--   A recorrência deve ser validada antes de persistir ou provisionar o
-    schedule.
-
-## 4. Modelagem no DynamoDB
-
-Tabela sugerida: `ScheduledEvents`.
-
-Um item por agendamento, usando uma chave composta:
-
-```text
-PK = USER#123
-SK = HUB_RELATORIO#abc-123
-```
-
-O prefixo da `SK` é o identificador do produto/agrupamento, e não um
-`eventType` genérico. A modelagem adotada não mantém um atributo
-`eventType` separado: o `productKey` identifica o agrupamento e também
-pode ser utilizado pela aplicação para direcionar o processamento.
-
-  Atributo                     Tipo DynamoDB   Descrição
-  ---------------------------- --------------- ---------------------------------
-  `PK`                         String          `USER#{userId}`
-  `SK`                         String          `{productKey}#{scheduleId}`
-  `scheduleId`                 String          UUID do agendamento
-  `name`                       String          Nome amigável
-  `status`                     String          Estado do agendamento
-  `syncStatus`                 String          Estado da sincronização com AWS
-  `recurrence`                 Map             Regra de recorrência
-  `payload`                    String          JSON serializado
-  `schemaVersion`              Number          Versão do contrato do payload
-  `timezone`                   String          Fuso horário IANA
-  `eventBridgeScheduleName`    String          Nome no EventBridge
-  `eventBridgeScheduleGroup`   String          Grupo no EventBridge
-  `createdAt`                  Number          Timestamp de criação
-  `updatedAt`                  Number          Timestamp de atualização
-
-### Exemplo de item
-
-``` json
-{
-  "PK": "USER#123",
-  "SK": "HUB_RELATORIO#abc-123",
-  "scheduleId": "abc-123",
-  "name": "Gerar relatório",
-  "status": "ACTIVE",
-  "syncStatus": "SYNCED",
-  "schemaVersion": 1,
-  "timezone": "America/Sao_Paulo",
-  "recurrence": {
-    "frequency": "WEEKLY",
-    "time": "09:00",
-    "daysOfWeek": ["MONDAY", "TUESDAY", "WEDNESDAY"],
-    "startDate": "2026-11-09"
-  },
-  "payload": "{\"reportId\":\"123\",\"format\":\"PDF\"}",
-  "eventBridgeScheduleName": "abc-123",
-  "eventBridgeScheduleGroup": "user-schedules",
-  "createdAt": 1793900000,
-  "updatedAt": 1793900000
-}
-```
-
-Com essa chave, é possível atender a dois padrões de consulta usando `Query`:
-
-- Todos os agendamentos do usuário: consultar pela `PK = USER#{userId}`.
-- Somente os agendamentos de um produto: consultar pela mesma `PK` e
-  aplicar `begins_with(SK, "HUB_RELATORIO#")`, por exemplo.
-
-O padrão geral da chave de ordenação é `SK = {productKey}#{scheduleId}`.
-Exemplos: `HUB_RELATORIO#abc-123`, `HUB_PAGAMENTOS#def-456` e
-`HUB_EMAIL#ghi-789`. O prefixo identifica o produto/agrupamento responsável
-pelo agendamento; o sufixo identifica o agendamento.
-
-Não é necessário criar um GSI inicialmente para esses dois padrões de
-consulta. Adicione índices secundários apenas quando surgir outro padrão
-de acesso que não possa ser atendido pelas chaves existentes.
-
-Como a `SK` contém o `productKey`, a aplicação deve conhecê-lo para montar
-a chave completa em operações como `GetItem` e `UpdateItem`. O atributo
-`productKey` pode existir no modelo Java, mas não precisa ser duplicado
-como atributo DynamoDB se já estiver representado na `SK`.
-
-## 5. Decisão: String ou Map para o payload?
-
-**Decisão: armazenar o payload como String contendo JSON serializado.**
-
-Justificativas:
-
--   O agendador não interpreta o conteúdo do payload.
--   O JSON é transportado entre componentes.
--   Não há necessidade de consultas sobre propriedades internas.
--   Não existem atualizações parciais: quando necessário, o payload
-    inteiro será sobrescrito.
--   Evita conversão recursiva entre `JsonNode` e `AttributeValue`.
-
-Na aplicação Java:
-
-  Responsabilidade           Representação
-  -------------------------- --------------------
-  Persistência               `String`
-  Manipulação dinâmica       Jackson `JsonNode`
-  Processamento de negócio   DTO específico
-
-O `schemaVersion` permite controlar a evolução dos contratos de cada
-tipo de evento. O payload deve ser validado como JSON na entrada, mesmo
-que seja armazenado como texto.
-
-## 6. Separação entre domínio e infraestrutura
-
-O domínio não deve conhecer a sintaxe cron do EventBridge.
-
-  -----------------------------------------------------------------------
-  Componente                          Responsabilidade
-  ----------------------------------- -----------------------------------
-  `Recurrence`                        Representa a regra de negócio
-
-  `EventBridgeCronFactory`            Converte recorrência em expressão
-                                      cron do EventBridge
-
-  `SchedulerPort`                     Define as operações de agendamento
-                                      necessárias à aplicação
-
-  `EventBridgeSchedulerAdapter`       Implementa a integração com AWS
-  -----------------------------------------------------------------------
-
-Exemplo de fluxo:
-
-``` text
-Recurrence
-    |
-    v
-EventBridgeCronFactory
-    |
-    v
-cron(0 9 ? * MON,TUE,WED *)
-    |
-    v
-EventBridgeSchedulerAdapter
-```
-
-A aplicação depende da interface `SchedulerPort`, não diretamente do SDK
-da AWS. A conversão de recorrência para cron fica na infraestrutura.
-
-## 7. Operações e ciclo de vida
-
-  Operação    DynamoDB     EventBridge
-  ----------- ------------ -----------------------------
-  Criar       PutItem      CreateSchedule
-  Consultar   GetItem      ---
-  Listar      Query        ---
-  Atualizar   UpdateItem   UpdateSchedule
-  Pausar      UpdateItem   UpdateSchedule (`DISABLED`)
-  Reativar    UpdateItem   UpdateSchedule (`ENABLED`)
-  Cancelar    UpdateItem   DeleteSchedule
-
-O cancelamento pode ser lógico no DynamoDB (`CANCELLED`), preservando
-histórico, enquanto o schedule é removido do EventBridge.
-
-O usuário só pode gerenciar seus próprios agendamentos. O `userId` deve
-vir da identidade autenticada, não de um valor confiado no corpo da
-requisição. Cada operação deve validar a propriedade do agendamento.
-
-## 8. Arquitetura de execução
-
-``` text
-Java Scheduler API
-        |
-        v
-     DynamoDB
-        |
-        | Provisionamento / sincronização
-        v
-EventBridge Scheduler
-        |
-        v
-       SNS
-        |
-        v
-       SQS
-        |
-        v
-Java Consumer
-        |
-        v
-Identifica o produto pelo productKey e interpreta o payload
-```
-
-O consumidor utiliza o identificador do produto (`productKey`, por exemplo
-`HUB_RELATORIO`) para direcionar o processamento e desserializa o payload
-para o DTO correspondente. Se um produto precisar distinguir vários tipos
-de evento internamente, essa distinção pode fazer parte do contrato do
-payload ou de um atributo específico, conforme a necessidade de negócio.
-
-## 9. Pontos de atenção
-
-1.  **Consistência:** DynamoDB e EventBridge não compartilham uma
-    transação distribuída. Implementar operações idempotentes, retry e
-    reconciliação. Transactional Outbox com DynamoDB Streams é uma opção
-    para coordenar persistência e provisionamento.
-2.  **Timezone:** utilizar identificadores IANA e considerar as regras
-    de fuso horário ao converter datas de início e término.
-3.  **Precisão:** o EventBridge Scheduler tem precisão de invocação de
-    60 segundos; não deve ser tratado como um mecanismo de execução com
-    precisão de milissegundos.
-4.  **Dia mensal:** uma expressão cron para o dia 31 não executa nos
-    meses que não possuem esse dia, alinhando-se à política de ignorar a
-    ocorrência.
-5.  **Idempotência:** o consumer deve tolerar entregas repetidas; uma
-    mensagem duplicada não pode provocar efeitos de negócio duplicados,
-    como dois pagamentos.
-6.  **Falhas de entrega:** configurar retry policy e DLQ no EventBridge
-    Scheduler e monitorar falhas.
-7.  **Limite DynamoDB:** cada item tem limite de 400 KB, incluindo nomes
-    e valores dos atributos.
-8.  **Validação:** validar frequência, dias da semana, dia do mês,
-    timezone, intervalo de datas e JSON do payload antes de persistir.
-
-## 10. Decisões arquiteturais consolidadas
-
-  Decisão               Escolha
-  --------------------- ----------------------------------------
-  Entidade principal    `ScheduledEvent`
-  Recorrência           Objeto estruturado `Recurrence`
-  Payload               String JSON
-  Manipulação JSON      Jackson `JsonNode`
-  Persistência          DynamoDB
-  Particionamento       Por usuário (`USER#{userId}`)
-  Ordenação             Por produto e agendamento (`{productKey}#{scheduleId}`)
-  Consulta por produto  `Query` + `begins_with(SK, "{productKey}#")`
-  Recorrência semanal   Múltiplos dias em um schedule
-  Recorrência mensal    Ignorar dias inexistentes
-  Gerenciamento         Pelo próprio usuário
-  Agendamento externo   EventBridge Scheduler
-  Integração            Port & Adapter
-  Versionamento         `schemaVersion`
-  Sincronização         Estado separado, retry e reconciliação
-
-## Conclusão
-
-A modelagem mantém o agendador independente dos contratos de negócio dos
-eventos. Novos produtos/agrupamentos, como `HUB_RELATORIO`,
-`HUB_PAGAMENTOS` e `HUB_EMAIL`, podem ser adicionados sem alterar a
-estrutura principal da tabela DynamoDB. O prefixo da `SK` permite listar
-os agendamentos de um produto específico sem GSI, enquanto a `PK` permite
-listar todos os agendamentos do usuário.
-
-A regra de recorrência permanece expressa em conceitos de domínio
-(`WEEKLY`, `MONDAY`, `09:00`), enquanto a infraestrutura traduz essa
-regra para a tecnologia de agendamento utilizada.
-
-
-
-
-
-
-
-
-# Tarefa: Análise e consolidação de documentações — Agendador de eventos
-
-Atue como um **arquiteto de software sênior**, com experiência em Java, Spring Boot, AWS, DynamoDB, EventBridge Scheduler, SNS e SQS, além de arquitetura hexagonal, DDD e sistemas distribuídos.
-
-Tenho duas documentações que descrevem aspectos de um sistema de agendamento de eventos:
-
-1. **Documentação do projeto existente:** contém os padrões, convenções, nomenclaturas e decisões arquiteturais já adotados pelo projeto.
-2. **Documentação complementar do agendador:** contém uma proposta de modelagem e funcionalidades para o sistema de agendamento.
-
-Seu objetivo é analisar as duas documentações e produzir uma versão consolidada, incorporando as informações relevantes da documentação complementar sem descaracterizar os padrões já existentes no projeto.
-
-## 1. Regra prioritária: preservar os padrões do projeto existente
-
-A documentação do projeto existente deve ser considerada a referência principal para convenções e nomenclaturas.
-
-Preserve rigorosamente os padrões já definidos, especialmente:
-
-- Nomenclatura de classes, interfaces, records, enums e métodos Java.
-- Nomenclatura de atributos e chaves do DynamoDB.
-- Padrões de Partition Key (PK) e Sort Key (SK).
-- Estrutura e organização dos pacotes.
-- Nomenclatura de propriedades, atributos e campos dos contratos.
-- Convenções de endpoints e recursos REST.
-- Padrões de serialização e estrutura dos objetos.
-- Padrões arquiteturais e responsabilidades de cada camada.
-
-**Não introduza uma nova nomenclatura apenas porque ela aparece na documentação complementar.**
-
-Caso a documentação complementar utilize nomes diferentes, adapte os conceitos aos padrões existentes, sem alterar arbitrariamente os nomes já estabelecidos.
-
-## 2. Processo obrigatório de análise
-
-Antes de modificar qualquer documentação:
-
-1. Leia integralmente os dois documentos.
-2. Identifique os conceitos e funcionalidades descritos em cada um.
-3. Identifique as decisões arquiteturais já estabelecidas.
-4. Compare as nomenclaturas Java e os atributos do DynamoDB.
-5. Identifique informações redundantes, complementares, conflitantes ou ausentes.
-6. Verifique se as propostas da documentação complementar são compatíveis com a arquitetura existente.
-
-Não comece a mescla antes de concluir essa análise.
-
-## 3. Uso obrigatório da skill `grillme`
-
-Utilize a skill `grillme` para conduzir o esclarecimento de dúvidas antes de tomar decisões que possam alterar a arquitetura, o modelo de dados ou os contratos existentes.
-
-**Não assuma, não invente e não tome decisões silenciosamente.**
-
-Sempre que encontrar:
-
-- Conflitos entre as duas documentações.
-- Ambiguidade na nomenclatura de classes ou atributos.
-- Decisões arquiteturais não especificadas.
-- Informações incompletas ou contraditórias.
-- Mais de uma interpretação possível para determinado requisito.
-- Necessidade de alterar uma decisão já estabelecida no projeto.
-
-Interrompa a execução e me questione utilizando a skill `grillme`.
-
-Faça perguntas objetivas, contextualizando o problema e apresentando as alternativas possíveis quando existirem.
-
-Não escolha uma alternativa por conta própria, mesmo que uma delas pareça tecnicamente mais adequada.
-
-Aguarde minhas respostas antes de prosseguir com os pontos que dependem delas.
-
-## 4. Critérios para a consolidação
-
-Ao mesclar as documentações:
-
-- Preserve integralmente as decisões válidas do projeto existente.
-- Incorpore os requisitos e funcionalidades relevantes do agendador.
-- Elimine duplicidades.
-- Resolva divergências somente após meu esclarecimento.
-- Mantenha consistência entre modelo de domínio, contratos, persistência e integrações AWS.
-- Não remova informações relevantes sem justificativa.
-- Não introduza tecnologias, componentes ou abstrações que não estejam justificadas pelos requisitos.
-- Não transforme sugestões em decisões arquiteturais sem minha aprovação.
-- Mantenha os exemplos de código coerentes com a nomenclatura oficial do projeto.
-
-## 5. Validação técnica
-
-Durante a análise, avalie especialmente a consistência entre:
-
-- Modelo de domínio Java.
-- Estrutura dos itens do DynamoDB.
-- Estratégia de consulta utilizando PK e SK.
-- Criação e gerenciamento de agendamentos no EventBridge Scheduler.
-- Publicação de eventos no SNS.
-- Entrega de mensagens no SQS.
-- Consumo e processamento pela aplicação Java.
-- Tratamento de duplicidade, idempotência e falhas.
-- Estados do agendamento e sincronização entre DynamoDB e EventBridge.
-- Regras de recorrência, periodicidade, timezone e datas de início e término.
-- Estratégia de atualização, pausa, reativação e cancelamento dos agendamentos.
-
-Não considere que uma decisão está correta apenas porque aparece em uma das documentações. Avalie sua coerência com os requisitos e com a arquitetura existente.
-
-## 6. Entregáveis
-
-Ao finalizar a análise e os esclarecimentos, produza:
-
-1. **Documentação consolidada:** versão única, organizada e coerente, incorporando o conteúdo relevante dos dois documentos.
-2. **Registro de decisões:** resumo das decisões mantidas, incorporadas, adaptadas e descartadas, com suas justificativas.
-3. **Registro de nomenclaturas:** relação dos nomes Java e atributos DynamoDB adotados, garantindo aderência aos padrões do projeto existente.
-4. **Pendências:** pontos que permaneceram sem definição, caso existam.
-
-Preserve a organização e o formato da documentação original sempre que possível.
-
-## 7. Restrições finais
-
-- Não sobrescreva os documentos originais.
-- Não descarte conteúdo sem justificativa.
-- Não altere nomenclaturas existentes sem minha autorização.
-- Não implemente código nesta etapa, a menos que eu solicite.
-- Não considere a documentação complementar como fonte de verdade para os padrões do projeto.
-- Não finalize a consolidação enquanto houver dúvidas relevantes sem esclarecimento.
+# Refatoração da integração AWS EventBridge Scheduler
+
+## 1. Contexto e objetivo
+
+O projeto já possui:
+
+- CRUD de agendamentos implementado.
+- Persistência no DynamoDB.
+- Integração com AWS EventBridge Scheduler implementada.
+- Regras de negócio e modelos existentes.
+
+Entretanto, a implementação atual da integração com o EventBridge apresenta problemas de organização e manutenção, como:
+
+- Muitas responsabilidades concentradas em uma única classe ou método.
+- Excesso de condicionais (`if/else` e `switch`) dentro dos mesmos métodos.
+- Mistura de regras de negócio com detalhes de infraestrutura.
+- Complexidade desnecessária na construção das requisições AWS.
+- Possível duplicação de lógica.
+- Baixa coesão e dificuldade de testar componentes isoladamente.
+
+**O objetivo não é criar uma nova integração, mas revisar e refatorar a implementação existente, tornando o código mais simples, coeso, legível, testável e fácil de manter.**
+
+A refatoração deve preservar o comportamento funcional atual, exceto quando forem identificados bugs ou inconsistências. Qualquer alteração de comportamento deverá ser previamente discutida e aprovada.
+
+## 2. Princípio fundamental: entender antes de alterar
+
+Antes de modificar qualquer código:
+
+1. Analise integralmente a implementação atual da integração com o EventBridge.
+2. Identifique todas as classes envolvidas.
+3. Entenda o fluxo completo de criação, atualização, pausa, reativação e exclusão.
+4. Identifique as responsabilidades de cada classe e método.
+5. Identifique condicionais excessivas e responsabilidades misturadas.
+6. Identifique dependências entre domínio, aplicação e infraestrutura.
+7. Analise os testes existentes e o comportamento esperado.
+8. Identifique oportunidades de refatoração sem introduzir abstrações desnecessárias.
+
+Não presuma que a implementação atual está errada em todos os aspectos. Preserve as partes que já apresentam boa separação de responsabilidades.
+
+## 3. Objetivo da refatoração
+
+Busque uma implementação orientada pelos seguintes princípios:
+
+- Single Responsibility Principle (SRP).
+- Separation of Concerns.
+- Clean Code.
+- Clean Architecture.
+- Baixo acoplamento.
+- Alta coesão.
+- Composição em vez de condicionais excessivas.
+- Testabilidade.
+- Simplicidade.
+
+Evite criar uma arquitetura excessivamente fragmentada.
+
+A intenção não é transformar cada `if` em uma classe ou criar abstrações para operações triviais.
+
+A intenção é que cada componente tenha uma responsabilidade clara e que os métodos expressem suas intenções sem concentrar múltiplas decisões e transformações.
+
+## 4. Separação de responsabilidades desejada
+
+Avalie a possibilidade de organizar a implementação em responsabilidades como:
+
+**Application Service / Use Case**
+- Orquestra o fluxo da operação.
+- Coordena persistência e integração.
+- Não conhece detalhes do AWS SDK.
+
+**Port / Gateway**
+- Define o contrato de interação com o serviço de agendamento.
+- Não expõe tipos específicos da AWS.
+
+**EventBridge Scheduler Adapter**
+- Implementa a comunicação com a AWS.
+- Executa operações de criação, atualização e exclusão.
+- Trata particularidades da API do Scheduler.
+
+**Cron Expression Factory**
+- Responsável exclusivamente pela conversão de recorrências para expressões cron.
+- Não executa chamadas AWS.
+- Não acessa repositórios.
+
+**Request Mapper / Factory**
+- Responsável por construir os objetos de requisição do AWS SDK.
+- Mantém a montagem dos requests separada da execução das chamadas externas.
+
+**Configuration**
+- Centraliza configurações do cliente AWS, grupo de agendamento, tópico SNS e Execution Role.
+
+Essas são responsabilidades de referência, não uma exigência de criação de classes com esses nomes.
+
+Primeiro identifique o que já existe e reutilize componentes adequados.
+
+## 5. Convenções que devem ser preservadas
+
+### Nomenclatura
+
+Preserve os padrões existentes de:
+
+- Classes Java.
+- Interfaces.
+- Records.
+- Enums.
+- Métodos.
+- Atributos.
+- DTOs.
+- Entidades.
+- Atributos e chaves do DynamoDB.
+- Estrutura de pacotes.
+
+Não renomeie componentes existentes sem uma justificativa técnica e minha aprovação.
+
+### Representação dos dias da semana
+
+O projeto já utiliza um array numérico para representar os dias da semana:
+
+| Valor | Dia |
+|---|---|
+| 1 | Domingo |
+| 2 | Segunda-feira |
+| 3 | Terça-feira |
+| 4 | Quarta-feira |
+| 5 | Quinta-feira |
+| 6 | Sexta-feira |
+| 7 | Sábado |
+
+Essa convenção deve ser preservada em todo o domínio e nos contratos existentes.
+
+A conversão para os valores aceitos pelo AWS EventBridge deve ocorrer exclusivamente na camada de infraestrutura.
+
+Exemplo:
+
+`[1, 3, 5]` deve gerar `SUN,TUE,THU` na expressão cron.
+
+Não introduza outra representação para os dias da semana sem necessidade.
+
+## 6. Análise crítica das condicionais
+
+Um dos principais objetivos é reduzir a complexidade dos métodos atuais.
+
+Analise especialmente métodos que:
+
+- Executam vários `if/else` para decidir como criar um agendamento.
+- Misturam DAILY, WEEKLY e MONTHLY em um único fluxo complexo.
+- Constroem expressões cron e requests AWS no mesmo método.
+- Tratam criação, atualização e exclusão com responsabilidades sobrepostas.
+- Misturam validação, transformação e execução de chamadas externas.
+- Possuem múltiplas responsabilidades dependendo do status do agendamento.
+
+Considere alternativas como:
+
+- Métodos privados especializados.
+- Factories.
+- Mappers.
+- Estratégias específicas por tipo de recorrência, quando justificadas.
+- Composição de componentes pequenos.
+- Polimorfismo, quando realmente reduzir o acoplamento.
+
+**Não elimine condicionais apenas por estética.** Um `switch` simples e coeso pode ser melhor do que uma hierarquia desnecessária de classes.
+
+O critério é reduzir complexidade e melhorar a clareza, não apenas reduzir a quantidade de linhas ou condicionais.
+
+## 7. Requisitos funcionais e técnicos
+
+A refatoração deve preservar as funcionalidades existentes:
+
+- Criação de agendamentos.
+- Atualização de agendamentos.
+- Exclusão de agendamentos.
+- Pausa e reativação, quando suportadas.
+- Recorrência diária, semanal e mensal.
+- Recorrência semanal com múltiplos dias.
+- Timezone IANA.
+- Payload JSON genérico.
+- Integração com SNS como target do EventBridge Scheduler.
+
+Considere também:
+
+- AWS SDK for Java 2.x.
+- FlexibleTimeWindow.
+- Execution Role.
+- Idempotência.
+- Retry e tratamento de throttling.
+- Exceções específicas da AWS.
+- Consistência entre DynamoDB e EventBridge.
+
+Não modifique regras funcionais ou contratos externos como parte de uma simples refatoração sem antes discutir o impacto.
+
+## 8. Uso obrigatório da skill grillme
+
+Utilize a skill `grillme` para esclarecer dúvidas antes de tomar decisões que possam impactar o projeto.
+
+Questione-me quando encontrar:
+
+- Mais de uma abordagem possível de refatoração.
+- Necessidade de alterar contratos.
+- Necessidade de modificar o modelo de domínio.
+- Ambiguidades na implementação atual.
+- Regras de negócio não documentadas.
+- Possíveis bugs cujo comportamento esperado não esteja claro.
+- Oportunidades de simplificação que alterem o comportamento.
+- Necessidade de introduzir novas abstrações.
+
+Ao fazer perguntas:
+
+1. Explique o problema identificado.
+2. Apresente as alternativas possíveis.
+3. Explique brevemente os impactos de cada alternativa.
+4. Recomende uma abordagem quando houver fundamento técnico.
+5. Aguarde minha decisão.
+
+Não assuma comportamentos ou regras de negócio com base apenas na interpretação do código.
+
+Não faça perguntas sobre decisões que já estejam claramente documentadas.
+
+## 9. Estratégia de execução
+
+Execute a tarefa nas seguintes etapas:
+
+### Etapa 1 — Diagnóstico da implementação atual
+
+Apresente:
+
+- Classes envolvidas.
+- Fluxo atual de execução.
+- Responsabilidades identificadas.
+- Principais pontos de complexidade.
+- Condicionais excessivas.
+- Acoplamentos.
+- Duplicações.
+- Problemas de testabilidade.
+- Oportunidades de melhoria.
+
+Não altere código nesta etapa.
+
+### Etapa 2 — Proposta de refatoração
+
+Apresente uma proposta objetiva contendo:
+
+- Estrutura sugerida de classes.
+- Responsabilidade de cada componente.
+- Métodos que serão simplificados.
+- Responsabilidades que serão extraídas.
+- Componentes que serão mantidos.
+- Componentes que serão modificados ou removidos.
+- Benefícios esperados.
+
+Priorize a menor mudança estrutural capaz de resolver os problemas identificados.
+
+### Etapa 3 — Esclarecimentos
+
+Utilize a skill `grillme` para resolver dúvidas e validar decisões que não estejam estabelecidas.
+
+Aguarde minhas respostas antes de prosseguir com as decisões dependentes delas.
+
+### Etapa 4 — Refatoração
+
+Implemente as mudanças aprovadas.
+
+Regras:
+
+- Preserve o comportamento funcional.
+- Preserve os contratos existentes.
+- Evite mudanças fora do escopo.
+- Não duplique componentes.
+- Não introduza abstrações desnecessárias.
+- Não altere a persistência sem autorização.
+- Mantenha o código compatível com as versões existentes do projeto.
+
+### Etapa 5 — Testes e validação
+
+Execute os testes existentes e crie ou adapte testes para validar:
+
+- Conversão dos dias da semana.
+- Expressões cron.
+- Recorrências DAILY, WEEKLY e MONTHLY.
+- Construção das requisições AWS.
+- Criação, atualização e exclusão.
+- Pausa e reativação.
+- Tratamento de exceções.
+- Idempotência, conforme a implementação existente.
+
+Garanta que os testes não dependam de chamadas reais à AWS.
+
+### Etapa 6 — Comparação final
+
+Apresente uma comparação entre a implementação anterior e a refatorada.
+
+Destaque:
+
+- Responsabilidades antes misturadas que foram separadas.
+- Métodos simplificados.
+- Condicionais removidas ou reorganizadas.
+- Abstrações introduzidas e suas justificativas.
+- Melhorias de testabilidade.
+- Comportamentos preservados.
+- Possíveis limitações restantes.
+
+## 10. Restrições
+
+- Não recrie a integração do zero.
+- Não recrie o CRUD.
+- Não substitua os padrões existentes por convenções próprias.
+- Não altere o modelo de dados sem autorização.
+- Não faça uma refatoração massiva sem diagnóstico.
+- Não adicione design patterns sem necessidade real.
+- Não transforme métodos simples em estruturas complexas.
+- Não altere o comportamento funcional silenciosamente.
+- Não implemente antes de apresentar o diagnóstico e a proposta.
 
 ## Primeira ação
 
-Comece identificando e lendo as duas documentações.
+Leia e analise a implementação atual da integração com o AWS EventBridge Scheduler.
 
-Em seguida, apresente um diagnóstico inicial das diferenças, compatibilidades e conflitos encontrados.
+**Não escreva ou modifique código ainda.**
 
-Utilize a skill `grillme` para conduzir as perguntas necessárias.
+Apresente um diagnóstico técnico, identifique os pontos de maior complexidade e proponha uma refatoração incremental, priorizando simplicidade, coesão e separação de responsabilidades.
 
-**Sua prioridade é produzir uma documentação consolidada que respeite integralmente a identidade arquitetural e os padrões do projeto existente, sem introduzir decisões por suposição.**
+Utilize a skill `grillme` para esclarecer as decisões necessárias antes de implementar.
